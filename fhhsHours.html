@@ -1,0 +1,218 @@
+<style>
+
+</style>
+<form id="search" name="search" onsubmit="return allin()">
+    Fort Hays Honor Society Attendance Compiler
+    <button id="submit" type="submit" value="Submit">Compile</button><span id="clrOut"></span>
+</form>
+<br />
+<div id="searchOut">
+        <span id="fOut"></span>
+</div>
+<script>
+        mutex = true;
+        function checkMutex() {
+            if (mutex) {
+                setTimeout(function(){checkMutex()}, 100);
+            } else {
+                document.getElementById("clrOut").innerHTML = "<button onClick='return clrPage()'>Clear</button>";
+                printMaster();
+                document.getElementById("submit").disabled = false;
+                document.getElementById("submit").innerHTML = "Compile";
+            };
+            return false;
+        }
+        document.getElementById("submit").disabled = true;
+        document.getElementById("submit").innerHTML = "Loading";
+        var getJSON = function(url, callback) { // Retrieve JSON from google sheets
+    
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.responseType = 'json';
+    
+        xhr.onload = function() {
+            var status = xhr.status;
+            if (status == 200) {
+                callback(null, xhr.response);
+            } else {
+                callback(status);
+            }
+        };
+    
+        xhr.send();
+        };
+    
+        var master = "https://script.google.com/macros/s/AKfycbzGvKKUIaqsMuCj7-A2YRhR-f7GZjl4kSxSN1YyLkS01_CfiyE/exec?id="
+            + "1pphrYodlfVxafPG8AzgGgTuRZSwk3rumj0Lzmu0zJvM"
+            + "&sheet=Attendance&header=1&startRow=2";
+        getJSON(master,  function(err, data) {
+    
+            if (err != null) {
+                console.error(err);
+                document.getElementById("fOut").innerHTML = "Something went wrong";
+                return false;
+    
+            } else {
+                // Fail to find response
+                if (data.records[0] == null) {
+                    document.getElementById("fOut").innerHTML = "No matches found. Is your spelling correct?<br>If you believe this is a mistake, please contact us.";
+                    return false;
+                }
+            }
+    
+            // Update the page with the new data
+            masterList = data.records; // store data
+            document.getElementById("submit").disabled = false;
+            document.getElementById("submit").innerHTML = "Compile";
+            console.log('masterList Loaded!')
+            console.log(masterList.length);
+            return masterList;
+        });       
+    
+        function storeData(dataIn){
+            for (y of dataIn.contents){ // Iterate through new entries
+                if (y.First_Name == '') continue;
+                try {
+                    var x = masterList.findIndex(function(i){ // Find the location of the match
+                    return i.Email.toLowerCase().trim() == y.Campus_Email.toLowerCase().trim(); // compare email fields
+                    });
+                } catch (err){var x = -1;}
+                if (x == -1){ // if fail to find email
+                    console.warn("Email not found for: " + y.First_Name + " " + y.Last_Name + " from " + dataIn.Name);
+                    x = masterList.findIndex(function(i){ // Find the location of the match
+                        return (i.First.toLowerCase().trim() == y.First_Name.toLowerCase().trim()
+                            && i.Last.toLowerCase().trim() == y.Last_Name.toLowerCase().trim()); // compare name fields
+                    });
+                }
+                try {
+                    if (typeof(masterList[x].Events) == 'string') { // check for manual input
+                        if (masterList[x].Events == ''){
+                            masterList[x].Events = [];
+                        } else masterList[x].Events = masterList[x].Events.split(', '); // convert to array
+                    }
+                    masterList[x].Events.push(dataIn.Name); // append event to array
+                    masterList[x].Total_Event_Attendance = masterList[x].Total_Event_Attendance + 1;
+                }
+                catch (err){
+                    try { var suggestion = masterList[masterList.findIndex(function(i){
+                        return (i.Last.toLowerCase().trim() == y.Last_Name.toLowerCase().trim());
+                    })].First + " " + y.Last_Name}
+                    catch (err) {var suggestion = y.First_Name + " " + masterList[masterList.findIndex(function(i){
+                        return (i.First.toLowerCase().trim() == y.First_Name.toLowerCase().trim());
+                    })].Last}
+                    console.error(" Failure to match " + y.Campus_Email + ", \"" + y.First_Name + " " + y.Last_Name + "\"" +
+                    "\nDid you mean " + suggestion + "?");
+                    alert(" Failure to match " + y.Campus_Email + ", \"" + y.First_Name + " " + y.Last_Name + "\"" +
+                    "\nDid you mean " + suggestion + "?");
+                }
+                
+            }
+            console.log(dataIn.Name + " stored")
+            storedSheets += 1;
+            if (storedSheets == eventList.length) {mutex = false;}
+        }
+    
+        function updateMaster(ename, event){
+            var newEvent;
+    
+            console.log("Event Name: " + ename);
+            console.log("Event URL: " + event);
+
+            event = event.split('/');
+            event = event[5];
+            console.log("Event ID: " + event);
+    
+            clrPage();
+            document.getElementById("submit").disabled = true;
+            document.getElementById("submit").innerHTML = "Loading";
+    
+            var srcurl = "https://script.google.com/macros/s/" +
+                "AKfycbzGvKKUIaqsMuCj7-A2YRhR-f7GZjl4kSxSN1YyLkS01_CfiyE/exec?id=" +
+                event +    // This is the only part of the string that should be edited
+                "&sheet=Attendance&header=6&startRow=7";
+                
+            getJSON(srcurl,  function(err, data) {
+    
+                    if (err != null) {
+                        console.error(err);
+                        document.getElementById("fOut").innerHTML = "Something went wrong";
+                                            return false;
+                    }
+        
+                        // Fail to find response
+                        if (data.records[0] == null) {
+                            document.getElementById("fOut").innerHTML = "No matches found. Is your spelling correct?<br>If you believe this is a mistake, please contact us.";
+                                                    return false;
+                        }
+
+                        // Update the page with the new data
+                        newEvent = {'Name': ename,'contents': data.records}; // store data
+    
+                        storeData(newEvent);            
+                });
+                
+                
+                document.getElementById("clrOut").innerHTML = "<button onClick='return clrPage()'>Clear</button>";
+    
+            return false;
+        }
+
+        function allin(){
+            document.getElementById("submit").disabled = true;
+            document.getElementById("submit").innerHTML = "Loading";
+            storedSheets = 0;
+    
+            var srcurl = "https://script.google.com/macros/s/" +
+                "AKfycbzGvKKUIaqsMuCj7-A2YRhR-f7GZjl4kSxSN1YyLkS01_CfiyE/exec?id=" +
+                "1Pj6nZIWlimejIsIaM625t5fqg61wgEQ6ugLbtg6FGhs" +    // This is the only part of the string that should be edited
+                "&sheet=External&header=2&startRow=3";
+                
+            getJSON(srcurl,  function(err, data) {
+    
+                    if (err != null) {
+                        console.error(err);
+                        document.getElementById("fOut").innerHTML = "Something went wrong";
+                                            return false;
+                    }
+        
+                        // Fail to find response
+                        if (data.records[0] == null) {
+                            document.getElementById("fOut").innerHTML = "No matches found. Is your spelling correct?<br>If you believe this is a mistake, please contact us.";
+                                                    return false;
+                        }
+
+                        // Update the page with the new data
+                        eventList = data.records; // store data
+                        
+                        for (i of eventList) {
+                            updateMaster(i['Event'], i['URL']);
+                        }
+                });
+                
+                checkMutex();
+                return false;
+        }
+    
+        function clrPage(){
+            document.getElementById("clrOut").innerHTML = "";
+            document.getElementById("fOut").innerHTML = "";
+    
+            return false;
+        }
+    
+        function printMaster(){
+            var printOut = '<table>';
+            for (entry of masterList) {
+                if (entry.First == '') continue;
+                printOut = printOut.concat('<tr>');
+                for (keyPair in entry) {
+                    printOut = printOut.concat('<td>' + `${entry[keyPair]}` + '</td>');
+                }
+                printOut = printOut.concat('</tr>');
+            }
+            printOut = printOut.concat('</table>');
+            console.log("Printing masterList");
+            document.getElementById('fOut').innerHTML = printOut;
+            return false;
+        }
+    </script>
